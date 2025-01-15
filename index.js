@@ -17,10 +17,10 @@ app.use(bodyParser.urlencoded({ extended: true }));
 //application/json 의 데이터를 분석해서 가져오기 위해 설정
 app.use(bodyParser.json());
 
-//db 연결하기
+//mongooDb 연결하기(정보 별도 관리)
 mongoose
   .connect(config.mongoURI)
-  .then(() => console.log("MongoDB Connected..."))
+  .then(() => console.log("MongoDB Connected OK!"))
   .catch((err) => console.log(err));
 
 app.get("/", (req, res) =>
