@@ -11,10 +11,10 @@ const bodyParser = require("body-parser");
 
 const config = require("./config/key");
 
-//application/x-www-form-urlencoded 의 데이터를 가져오기 위해 설정
+//application/x-www-form-urlencoded 의 데이터를 분석해서 가져오기 위해 설정
 app.use(bodyParser.urlencoded({ extended: true }));
 
-//application/json 의 데이터를 가져오기 위해 설정
+//application/json 의 데이터를 분석해서 가져오기 위해 설정
 app.use(bodyParser.json());
 
 //db 연결하기
