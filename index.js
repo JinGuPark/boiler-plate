@@ -1,42 +1,108 @@
 const express = require("express");
 const app = express();
 const port = 5000;
-
-// mongoo DB 설치
-// npm install mongoose --save
-const mongoose = require("mongoose"); //package.json 에 'mongoose' 추가된거 확인.
-
-const { User } = require("./models/User");
+const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
-
+const cookieParser = require("cookie-parser");
 const config = require("./config/key");
+const { User } = require("./models/User");
+const { auth } = require("./middleware/auth");
 
-//application/x-www-form-urlencoded 의 데이터를 분석해서 가져오기 위해 설정
+// Body-parser 설정
 app.use(bodyParser.urlencoded({ extended: true }));
-
-//application/json 의 데이터를 분석해서 가져오기 위해 설정
 app.use(bodyParser.json());
+app.use(cookieParser());
 
-//mongooDb 연결하기(정보 별도 관리)
+// MongoDB 연결
 mongoose
-  .connect(config.mongoURI)
+  .connect(config.mongoURI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
   .then(() => console.log("MongoDB Connected OK!"))
   .catch((err) => console.log(err));
 
-app.get("/", (req, res) =>
-  res.send("Hello World! <br> 새해 복 많이 받으세요.")
-);
+// 기본 라우트
+app.get("/", (req, res) => res.send("Hello World!"));
 
-app.post("/register", (req, res) => {
-  //회원가입 할때 필요한 정보들을 client에서 가져와서 db에 넣어준다.
+// 회원가입 라우트
+app.post("/api/user/register", async (req, res) => {
   const user = new User(req.body);
 
-  user.save((err, userInfo) => {
-    if (err) return res.json({ success: false, err });
+  try {
+    const userInfo = await user.save();
     return res.status(200).json({
-      seccess: true,
+      success: true,
+      userInfo,
     });
-  });
+  } catch (err) {
+    console.error(err);
+    return res.json({ success: false, err });
+  }
 });
 
-app.listen(port, () => console.log("Example app listening on port ${port}!"));
+// 로그인 라우트
+app.post("/api/user/login", async (req, res) => {
+  try {
+    // 요청된 이메일을 데이터베이스에서 찾기
+    const user = await User.findOne({ email: req.body.email });
+    if (!user) {
+      return res.json({
+        loginSuccess: false,
+        message: "제공된 이메일에 해당하는 유저가 없습니다.",
+      });
+    }
+
+    // 비밀번호가 맞는지 확인
+    const isMatch = await user.comparePassword(req.body.password);
+    if (!isMatch) {
+      return res.json({
+        loginSuccess: false,
+        message: "비밀번호가 틀렸습니다.",
+      });
+    }
+
+    // 토큰 생성
+    const tokenUser = await user.generateToken();
+    res.cookie("x_auth", tokenUser.token).status(200).json({
+      loginSuccess: true,
+      userId: tokenUser._id,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(400).send(err);
+  }
+});
+
+// 인증 라우트
+app.get("/api/user/auth", auth, async (req, res) => {
+  try {
+    const token = req.cookies.x_auth;
+    if (!token) {
+      return res.json({ isAuth: false, error: true });
+    }
+
+    const user = await User.findByToken(token);
+    if (!user) {
+      return res.json({ isAuth: false, error: true });
+    }
+
+    return res.json({ isAuth: true, user });
+  } catch (err) {
+    console.error(err);
+    return res.status(400).send(err);
+  }
+});
+
+// 로그아웃 라우트
+app.get("/api/user/logout", auth, async (req, res) => {
+  try {
+    await User.findOneAndUpdate({ _id: req.user._id }, { token: "" });
+    return res.status(200).send({ success: true });
+  } catch (err) {
+    console.error(err);
+    return res.status(400).json({ success: false, err });
+  }
+});
+
+app.listen(port, () => console.log(`Example app listening on port ${port}!`));
